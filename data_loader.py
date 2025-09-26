@@ -1,5 +1,6 @@
 import json
 import pandas as pd
+import torch
 from transformers import AutoTokenizer
 from torch.utils.data import Dataset, DataLoader
 from config import Config
@@ -122,6 +123,115 @@ def build_common_ids(corpus_file, mesh_file, output_file):
             f.write(pmid + "\n")
 
     print(f"✅ Done! Found {len(common_pmids)} common IDs. Saved to {output_file}")
+
+
+class StreamingContrastiveDataset(torch.utils.data.IterableDataset):
+    def __init__(self, corpus_file, tokenizer, max_length=512):
+        self.corpus_file = corpus_file
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return 11713201
+
+    def __iter__(self):
+        with open(self.corpus_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                try:
+                    paper = json.loads(line.strip())
+                    title = paper.get('title', '').strip()
+                    abstract = paper.get('text', '').strip()
+
+                    if len(title) < 10 or len(abstract) < 50:
+                        continue
+
+                    title_encoding = self.tokenizer(
+                        title,
+                        max_length=self.max_length,
+                        padding='max_length',
+                        truncation=True,
+                        return_tensors='pt'
+                    )
+
+                    abstract_encoding = self.tokenizer(
+                        abstract,
+                        max_length=self.max_length,
+                        padding='max_length',
+                        truncation=True,
+                        return_tensors='pt'
+                    )
+
+                    yield {
+                        'title_input_ids': title_encoding['input_ids'].squeeze(0),
+                        'title_attention_mask': title_encoding['attention_mask'].squeeze(0),
+                        'abstract_input_ids': abstract_encoding['input_ids'].squeeze(0),
+                        'abstract_attention_mask': abstract_encoding['attention_mask'].squeeze(0),
+                    }
+
+                except (json.JSONDecodeError, KeyError) as e:
+                    continue
+
+
+class ContrastivePairDataset(Dataset):
+    def __init__(self, corpus_file, max_samples=None):
+        self.corpus_file = corpus_file
+        self.tokenizer = AutoTokenizer.from_pretrained(Config.MODEL_NAME)
+        self.max_length = Config.MAX_LENGTH
+
+        self.data = []
+        count = 0
+
+        with open(corpus_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                if max_samples and count >= max_samples:
+                    break
+
+                paper = json.loads(line.strip())
+                title = paper.get('title', '').strip()
+                abstract = paper.get('text', '').strip()
+
+                if title and abstract:
+                    self.data.append({
+                        'title': title,
+                        'abstract': abstract,
+                        'pmid': paper.get('_id', str(count))
+                    })
+                count += 1
+
+                if count % 100000 == 0:
+                    print(f"Loaded {count} papers, kept {len(self.data)} valid pairs")
+
+        print(f"Final dataset size: {len(self.data)} (title, abstract) pairs")
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        item = self.data[idx]
+
+        title_encoding = self.tokenizer(
+            item['title'],
+            max_length=self.max_length,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        )
+
+        abstract_encoding = self.tokenizer(
+            item['abstract'],
+            max_length=self.max_length,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        )
+
+        return {
+            'title_input_ids': title_encoding['input_ids'].squeeze(0),
+            'title_attention_mask': title_encoding['attention_mask'].squeeze(0),
+            'abstract_input_ids': abstract_encoding['input_ids'].squeeze(0),
+            'abstract_attention_mask': abstract_encoding['attention_mask'].squeeze(0),
+            'pmid': item['pmid']
+        }
 
 
 if __name__ == "__main__":
