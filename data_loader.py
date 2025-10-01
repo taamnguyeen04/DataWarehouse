@@ -60,7 +60,7 @@ class CorpusDataset(Dataset):
                     break
         
         text = f"[CLS] {paper['title']} [SEP] {paper['text']} [SEP]"
-        print("encoding")
+        # print("encoding")
         encoding = self.tokenizer(
             text,
             max_length=Config.MAX_LENGTH,
@@ -68,7 +68,7 @@ class CorpusDataset(Dataset):
             truncation=True,
             return_tensors='pt'
         )
-        print("encode xong")
+        # print("encode xong")
         return text, encoding
 
     def __getitembyid__(self, pmid):
@@ -236,7 +236,7 @@ class ContrastivePairDataset(Dataset):
 
 if __name__ == "__main__":
     corpus = CorpusDataset(Config.CORPUS_FILE)
-    print(corpus[2])
+    print(len(corpus))
     # print(corpus.__getitembyid__(15555068))
     # mesh = Mesh(Config.PMID_MESH_FILE)
     # print(mesh[0])

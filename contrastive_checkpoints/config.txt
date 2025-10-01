@@ -1,0 +1,9 @@
+corpus_file: C:/Users/tam/Documents/data/Data Warehouse\ReCDS_benchmark/PAR/corpus.jsonl
+batch_size: 8
+learning_rate: 0.0001
+epochs: 5
+projection_dim: 768
+temperature: 0.07
+max_length: 512
+mixed_precision: True
+model_name: microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext
