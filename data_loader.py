@@ -235,19 +235,25 @@ class ContrastivePairDataset(Dataset):
 
 
 class PARDataset(Dataset):
-    """Dataset for PAR (Patient Article Retrieval) bi-encoder training"""
+    """
+    Optimized Dataset for PAR (Patient Article Retrieval) bi-encoder training
+    Chỉ load các documents cần thiết thay vì load toàn bộ corpus vào RAM
+    """
     def __init__(self, queries_file, qrels_file, corpus_file, tokenizer, max_length=512):
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.corpus_file = corpus_file
 
+        print("Loading queries...")
         # Load queries
         self.queries = {}
         with open(queries_file, 'r', encoding='utf-8') as f:
             for line in f:
                 query = json.loads(line.strip())
-                # query format: {"_id": "...", "text": "patient summary..."}
                 self.queries[query['_id']] = query['text']
+        print(f"Loaded {len(self.queries)} queries")
 
+        print("Loading qrels...")
         # Load qrels (query-document relevance)
         self.qrels = {}  # {query_id: [list of relevant doc_ids]}
         with open(qrels_file, 'r', encoding='utf-8') as f:
@@ -255,43 +261,68 @@ class PARDataset(Dataset):
                 parts = line.strip().split('\t')
                 if len(parts) == 3:
                     query_id, doc_id, relevance = parts
-                    # print("aloalo   ", relevance)
-                    # print("aloaloalo   ", type(relevance))
                     try:
                         if int(relevance) > 0:
                             if query_id not in self.qrels:
                                 self.qrels[query_id] = []
                             self.qrels[query_id].append(doc_id)
                     except ValueError:
-                        # skip non-numeric relevance
                         continue
-
-        # Build corpus index: {doc_id: {"title": ..., "abstract": ...}}
-        self.corpus = {}
-        print(f"Loading corpus from {corpus_file}...")
-        with open(corpus_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                doc = json.loads(line.strip())
-                doc_id = str(doc.get('_id', ''))
-                title = doc.get('title', '').strip()
-                abstract = doc.get('text', '').strip()
-                if title or abstract:
-                    self.corpus[doc_id] = {
-                        'title': title,
-                        'abstract': abstract
-                    }
-
-        print(f"Loaded {len(self.corpus)} documents")
+        print(f"Loaded {len(self.qrels)} query-document relevance pairs")
 
         # Create training pairs: (query_id, positive_doc_id)
+        print("Creating training pairs...")
         self.pairs = []
         for query_id, doc_ids in self.qrels.items():
             if query_id in self.queries:
                 for doc_id in doc_ids:
-                    if doc_id in self.corpus:
-                        self.pairs.append((query_id, doc_id))
-
+                    self.pairs.append((query_id, doc_id))
         print(f"Created {len(self.pairs)} query-document pairs")
+
+        # Tìm tất cả doc_ids cần thiết
+        needed_doc_ids = set()
+        for query_id, doc_ids in self.qrels.items():
+            needed_doc_ids.update(doc_ids)
+        print(f"Need to load {len(needed_doc_ids)} documents from corpus")
+
+        # Build corpus index: CHỈ load các documents cần thiết
+        print(f"Loading only required documents from {corpus_file}...")
+        self.corpus = {}
+        loaded_count = 0
+        total_lines = 0
+
+        with open(corpus_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                total_lines += 1
+                doc = json.loads(line.strip())
+                doc_id = str(doc.get('_id', ''))
+
+                # CHỈ load nếu doc_id có trong needed_doc_ids
+                if doc_id in needed_doc_ids:
+                    title = doc.get('title', '').strip()
+                    abstract = doc.get('text', '').strip()
+                    if title or abstract:
+                        self.corpus[doc_id] = {
+                            'title': title,
+                            'abstract': abstract
+                        }
+                        loaded_count += 1
+
+                # Progress indicator
+                if total_lines % 100000 == 0:
+                    print(f"Scanned {total_lines} lines, loaded {loaded_count}/{len(needed_doc_ids)} needed docs")
+
+                # Early exit nếu đã load đủ tất cả docs cần thiết
+                if loaded_count >= len(needed_doc_ids):
+                    print(f"All required documents loaded. Stopping scan.")
+                    break
+
+        print(f"Loaded {len(self.corpus)} documents (out of {total_lines} scanned)")
+
+        # Lọc lại pairs để chỉ giữ những pairs có cả query và doc
+        original_pairs_count = len(self.pairs)
+        self.pairs = [(q_id, d_id) for q_id, d_id in self.pairs if d_id in self.corpus]
+        print(f"Filtered pairs: {original_pairs_count} -> {len(self.pairs)} (removed {original_pairs_count - len(self.pairs)} pairs with missing docs)")
 
         # All doc_ids for random negative sampling
         self.all_doc_ids = list(self.corpus.keys())
