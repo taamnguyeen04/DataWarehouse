@@ -253,12 +253,18 @@ class PARDataset(Dataset):
         with open(qrels_file, 'r', encoding='utf-8') as f:
             for line in f:
                 parts = line.strip().split('\t')
-                if len(parts) == 4:
+                if len(parts) == 3:
                     query_id, doc_id, relevance = parts
-                    if int(relevance) > 0:  # only positive relevance
-                        if query_id not in self.qrels:
-                            self.qrels[query_id] = []
-                        self.qrels[query_id].append(doc_id)
+                    # print("aloalo   ", relevance)
+                    # print("aloaloalo   ", type(relevance))
+                    try:
+                        if int(relevance) > 0:
+                            if query_id not in self.qrels:
+                                self.qrels[query_id] = []
+                            self.qrels[query_id].append(doc_id)
+                    except ValueError:
+                        # skip non-numeric relevance
+                        continue
 
         # Build corpus index: {doc_id: {"title": ..., "abstract": ...}}
         self.corpus = {}

@@ -17,13 +17,11 @@ from config import Config
 
 def save_checkpoint(filepath, epoch, step, model, optimizer, loss):
     print(f"Đang lưu checkpoint: epoch {epoch}, step {step}, loss {loss:.4f}")
-    # Nếu model là DataParallel, lấy module gốc
-    model_state = model.module.state_dict() if isinstance(model, nn.DataParallel) else model.state_dict()
     checkpoint = {
         'epoch': epoch,
         'step': step,
         'loss': loss,
-        'model_state_dict': model_state,
+        'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
     }
     last_path = os.path.join(filepath, "last_model.pt")
@@ -53,13 +51,10 @@ def load_checkpoint(filepath, model, optimizer, device):
     best_loss = float('inf')
     loaded = False
 
-    # Xác định model để load state_dict (xử lý DataParallel)
-    model_to_load = model.module if isinstance(model, nn.DataParallel) else model
-
     if os.path.isfile(last_path):
         try:
             checkpoint = torch.load(last_path, map_location=device)
-            model_to_load.load_state_dict(checkpoint['model_state_dict'])
+            model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             start_epoch = checkpoint['epoch'] + 1
             start_step = checkpoint.get('step', 0)
@@ -71,7 +66,7 @@ def load_checkpoint(filepath, model, optimizer, device):
     if not loaded and os.path.isfile(best_path):
         try:
             checkpoint = torch.load(best_path, map_location=device)
-            model_to_load.load_state_dict(checkpoint['model_state_dict'])
+            model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             start_epoch = checkpoint['epoch'] + 1
             start_step = checkpoint.get('step', 0)
@@ -110,23 +105,12 @@ def train():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # Check số lượng GPU
-    n_gpus = torch.cuda.device_count()
-    print(f"Số lượng GPU có sẵn: {n_gpus}")
-    if n_gpus > 1:
-        print(f"Sử dụng DataParallel trên {n_gpus} GPU")
-
     tokenizer = AutoTokenizer.from_pretrained(Config.MODEL_NAME)
     model = BiEncoder(
         model_name=Config.MODEL_NAME,
         embedding_dim=Config.EMBEDDING_DIM,
         pooling=Config.POOLING
     ).to(device)
-
-    # Wrap model với DataParallel nếu có nhiều GPU
-    if n_gpus > 1:
-        model = nn.DataParallel(model)
-        print(f"Model wrapped với DataParallel trên GPU: {list(range(n_gpus))}")
 
     train_dataset = PARDataset(
         queries_file=Config.TRAIN_QUERIES,
@@ -265,4 +249,3 @@ def train():
 
 if __name__ == '__main__':
     train()
-

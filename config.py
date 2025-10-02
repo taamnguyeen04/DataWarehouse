@@ -24,7 +24,7 @@ class Config:
     POOLING = "mean"  # 'cls', 'mean', or 'max'
 
     # Training Hyperparameters
-    BATCH_SIZE = 32  # Large batch for in-batch negatives
+    BATCH_SIZE = 2  # Large batch for in-batch negatives
     NUM_EPOCHS = 10
     LEARNING_RATE = 2e-5
     WEIGHT_DECAY = 0.01
