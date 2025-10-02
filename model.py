@@ -1,80 +1,121 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import AutoModel
-from config import Config
+from transformers import AutoModel, AutoTokenizer
 
-class MultiTaskPARModel(nn.Module):
-    def __init__(self, num_mesh_classes, num_patients):
-        super().__init__()
-        
-        # PubMedBERT backbone
-        self.backbone = AutoModel.from_pretrained(Config.MODEL_NAME)
-        hidden_size = self.backbone.config.hidden_size
-        
-        # Task heads
-        self.classification_head = nn.Linear(hidden_size, num_mesh_classes)
-        self.link_prediction_head = nn.Linear(hidden_size * 2, 1)  # paper + patient embeddings
-        self.retrieval_head = nn.Linear(hidden_size, hidden_size)  # for similarity computation
-        
-        self.dropout = nn.Dropout(0.1)
-        
-    def forward(self, input_ids, attention_mask, task='classification'):
-        # Get paper embeddings
-        outputs = self.backbone(input_ids=input_ids, attention_mask=attention_mask)
-        paper_embeddings = outputs.last_hidden_state[:, 0, :]  # [CLS] token
-        paper_embeddings = self.dropout(paper_embeddings)
-        
-        if task == 'classification':
-            return self.classification_head(paper_embeddings)
-        
-        elif task == 'link_prediction':
-            # Cần thêm patient embeddings ở đây
-            return self.link_prediction_head(paper_embeddings)
-        
-        elif task == 'retrieval':
-            return self.retrieval_head(paper_embeddings)
-        
+
+class BiEncoder(nn.Module):
+    def __init__(self, model_name='microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext',
+                 embedding_dim=768, pooling='cls'):
+        super(BiEncoder, self).__init__()
+
+        self.query_encoder = AutoModel.from_pretrained(model_name)
+        self.doc_encoder = AutoModel.from_pretrained(model_name)
+
+        self.pooling = pooling
+        self.embedding_dim = embedding_dim
+
+        # Optional projection layer (uncomment if you want different embedding dim)
+        # self.projection = nn.Linear(768, embedding_dim)
+
+    def pool_embeddings(self, last_hidden_state, attention_mask):
+        if self.pooling == 'cls':
+            # Use [CLS] token embedding
+            return last_hidden_state[:, 0, :]
+
+        elif self.pooling == 'mean':
+            # Mean pooling with attention mask
+            token_embeddings = last_hidden_state
+            input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+            sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
+            sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+            return sum_embeddings / sum_mask
+
+        elif self.pooling == 'max':
+            # Max pooling
+            token_embeddings = last_hidden_state
+            input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+            token_embeddings[input_mask_expanded == 0] = -1e9
+            return torch.max(token_embeddings, 1)[0]
+
         else:
-            return paper_embeddings
+            raise ValueError(f"Unknown pooling method: {self.pooling}")
 
-
-class ContrastiveModel(nn.Module):
-    def __init__(self, projection_dim=768, temperature=0.07):
-        super().__init__()
-        self.encoder = AutoModel.from_pretrained(Config.MODEL_NAME)
-        hidden_size = self.encoder.config.hidden_size
-
-        self.projection_head = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, projection_dim),
+    def encode_query(self, input_ids, attention_mask):
+        # Encode query (patient summary)
+        outputs = self.query_encoder(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            return_dict=True
         )
+
+        pooled = self.pool_embeddings(outputs.last_hidden_state, attention_mask)
+
+        # Optional: apply projection
+        # pooled = self.projection(pooled)
+
+        # L2 normalization for cosine similarity
+        return F.normalize(pooled, p=2, dim=1)
+
+    def encode_doc(self, input_ids, attention_mask):
+        # Encode document (article title + abstract)
+        outputs = self.doc_encoder(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            return_dict=True
+        )
+
+        pooled = self.pool_embeddings(outputs.last_hidden_state, attention_mask)
+
+        # Optional: apply projection
+        # pooled = self.projection(pooled)
+
+        # L2 normalization for cosine similarity
+        return F.normalize(pooled, p=2, dim=1)
+
+    def forward(self, query_input_ids, query_attention_mask, doc_input_ids, doc_attention_mask):
+        query_embeddings = self.encode_query(query_input_ids, query_attention_mask)
+        doc_embeddings = self.encode_doc(doc_input_ids, doc_attention_mask)
+        return query_embeddings, doc_embeddings
+
+
+class InfoNCELoss(nn.Module):
+    def __init__(self, temperature=0.05):
+        super(InfoNCELoss, self).__init__()
         self.temperature = temperature
+        self.criterion = nn.CrossEntropyLoss()
 
-    def forward(self, input_ids, attention_mask):
-        outputs = self.encoder(input_ids=input_ids, attention_mask=attention_mask)
-        embeddings = outputs.last_hidden_state[:, 0, :]
+    def forward(self, query_embeddings, doc_embeddings):
+        batch_size = query_embeddings.size(0)
 
-        projections = self.projection_head(embeddings)
-        projections = F.normalize(projections, p=2, dim=1)
-        return projections
+        similarity_matrix = torch.matmul(query_embeddings, doc_embeddings.T) / self.temperature
 
-    def compute_contrastive_loss(self, title_embeddings, abstract_embeddings):
-        batch_size = title_embeddings.shape[0]
+        labels = torch.arange(batch_size, device=query_embeddings.device)
 
-        logits = torch.matmul(title_embeddings, abstract_embeddings.T) / self.temperature
+        loss_q2d = self.criterion(similarity_matrix, labels)
+        loss_d2q = self.criterion(similarity_matrix.T, labels)
 
-        labels = torch.arange(batch_size, device=logits.device)
+        loss = (loss_q2d + loss_d2q) / 2.0
 
-        loss_title_to_abstract = F.cross_entropy(logits, labels)
-        loss_abstract_to_title = F.cross_entropy(logits.T, labels)
-        total_loss = (loss_title_to_abstract + loss_abstract_to_title) / 2
+        return loss
 
-        pred_title = torch.argmax(logits, dim=1)
-        pred_abstract = torch.argmax(logits.T, dim=1)
-        acc_title = (pred_title == labels).float().mean()
-        acc_abstract = (pred_abstract == labels).float().mean()
-        accuracy = (acc_title + acc_abstract) / 2
 
-        return total_loss, accuracy
+if __name__ == "__main__":
+    model = BiEncoder()
+    batch_size = 4
+    seq_len = 128
+
+    query_input_ids = torch.randint(0, 30000, (batch_size, seq_len))
+    query_attention_mask = torch.ones(batch_size, seq_len)
+    doc_input_ids = torch.randint(0, 30000, (batch_size, seq_len))
+    doc_attention_mask = torch.ones(batch_size, seq_len)
+
+    query_emb, doc_emb = model(query_input_ids, query_attention_mask, doc_input_ids, doc_attention_mask)
+
+    print(f"Query embeddings shape: {query_emb.shape}")
+    print(f"Document embeddings shape: {doc_emb.shape}")
+
+    # Test loss
+    loss_fn = InfoNCELoss()
+    loss = loss_fn(query_emb, doc_emb)
+    print(f"InfoNCE loss: {loss.item()}")

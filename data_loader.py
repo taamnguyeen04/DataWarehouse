@@ -234,14 +234,107 @@ class ContrastivePairDataset(Dataset):
         }
 
 
+class PARDataset(Dataset):
+    """Dataset for PAR (Patient Article Retrieval) bi-encoder training"""
+    def __init__(self, queries_file, qrels_file, corpus_file, tokenizer, max_length=512):
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+        # Load queries
+        self.queries = {}
+        with open(queries_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                query = json.loads(line.strip())
+                # query format: {"_id": "...", "text": "patient summary..."}
+                self.queries[query['_id']] = query['text']
+
+        # Load qrels (query-document relevance)
+        self.qrels = {}  # {query_id: [list of relevant doc_ids]}
+        with open(qrels_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                parts = line.strip().split('\t')
+                if len(parts) == 4:
+                    query_id, doc_id, relevance = parts
+                    if int(relevance) > 0:  # only positive relevance
+                        if query_id not in self.qrels:
+                            self.qrels[query_id] = []
+                        self.qrels[query_id].append(doc_id)
+
+        # Build corpus index: {doc_id: {"title": ..., "abstract": ...}}
+        self.corpus = {}
+        print(f"Loading corpus from {corpus_file}...")
+        with open(corpus_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                doc = json.loads(line.strip())
+                doc_id = str(doc.get('_id', ''))
+                title = doc.get('title', '').strip()
+                abstract = doc.get('text', '').strip()
+                if title or abstract:
+                    self.corpus[doc_id] = {
+                        'title': title,
+                        'abstract': abstract
+                    }
+
+        print(f"Loaded {len(self.corpus)} documents")
+
+        # Create training pairs: (query_id, positive_doc_id)
+        self.pairs = []
+        for query_id, doc_ids in self.qrels.items():
+            if query_id in self.queries:
+                for doc_id in doc_ids:
+                    if doc_id in self.corpus:
+                        self.pairs.append((query_id, doc_id))
+
+        print(f"Created {len(self.pairs)} query-document pairs")
+
+        # All doc_ids for random negative sampling
+        self.all_doc_ids = list(self.corpus.keys())
+
+    def __len__(self):
+        return len(self.pairs)
+
+    def __getitem__(self, idx):
+        query_id, pos_doc_id = self.pairs[idx]
+
+        # Encode query (patient summary)
+        query_text = self.queries[query_id]
+        query_encoding = self.tokenizer(
+            query_text,
+            max_length=self.max_length,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        )
+
+        # Encode positive document (title + abstract)
+        pos_doc = self.corpus[pos_doc_id]
+        pos_doc_text = f"{pos_doc['title']} {pos_doc['abstract']}".strip()
+        pos_doc_encoding = self.tokenizer(
+            pos_doc_text,
+            max_length=self.max_length,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        )
+
+        return {
+            'query_input_ids': query_encoding['input_ids'].squeeze(0),
+            'query_attention_mask': query_encoding['attention_mask'].squeeze(0),
+            'pos_doc_input_ids': pos_doc_encoding['input_ids'].squeeze(0),
+            'pos_doc_attention_mask': pos_doc_encoding['attention_mask'].squeeze(0),
+            'query_id': query_id,
+            'pos_doc_id': pos_doc_id
+        }
+
+
 if __name__ == "__main__":
     corpus = CorpusDataset(Config.CORPUS_FILE)
-    print(len(corpus))
+    print(corpus[0])
     # print(corpus.__getitembyid__(15555068))
     # mesh = Mesh(Config.PMID_MESH_FILE)
     # print(mesh[0])
-    corpus_file = Config.CORPUS_FILE
-    mesh_file = Config.PMID_MESH_FILE
-    output_file = "common_pmids.txt"
-
-    build_common_ids(corpus_file, mesh_file, output_file)
+    # corpus_file = Config.CORPUS_FILE
+    # mesh_file = Config.PMID_MESH_FILE
+    # output_file = "common_pmids.txt"
+    #
+    # build_common_ids(corpus_file, mesh_file, output_file)

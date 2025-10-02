@@ -121,16 +121,6 @@ class MilvusInserter:
             return None
 
     def process_corpus(self, batch_size=100, save_interval=1000, start_idx=None, end_idx=None):
-        """
-        Xử lý corpus và insert vào Milvus
-
-        Args:
-            batch_size: số lượng document trong mỗi batch insert
-            save_interval: sau bao nhiêu document thì save checkpoint
-            start_idx: index bắt đầu (None để dùng checkpoint)
-            end_idx: index kết thúc (None để xử lý hết file)
-        """
-        # Dùng start_idx nếu được cung cấp, không thì dùng checkpoint
         if start_idx is not None:
             current_idx = start_idx
         else:
@@ -193,7 +183,7 @@ class MilvusInserter:
         self.collection.flush()
         pbar.close()
 
-        print(f"\n✅ Hoàn thành! Đã xử lý {line_idx - current_idx} documents")
+        print(f"\nHoàn thành! Đã xử lý {line_idx - current_idx} documents")
         print(f"Số lượng entities trong collection: {self.collection.num_entities}")
 
     def load_index(self):
@@ -206,6 +196,6 @@ if __name__ == "__main__":
     inserter = MilvusInserter(checkpoint_file='milvus_checkpoint.json')
 
     # 11713201
-    inserter.process_corpus(batch_size=100, save_interval=1000, start_idx=43000, end_idx=44000)
+    inserter.process_corpus(batch_size=100, save_interval=1000, start_idx=903000, end_idx=920000)
 
     inserter.load_index()
