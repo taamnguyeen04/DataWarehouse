@@ -43,11 +43,18 @@ class Config:
     LOG_INTERVAL = 50
 
     # Milvus
-    MILVUS_HOST = "10.243.88.63"
+    # MILVUS_HOST = "127.0.0.1"
+    # MILVUS_PORT = "19530"
+    MILVUS_HOST_SERVER = "0.tcp.ap.ngrok.io"
+    MILVUS_PORT_SERVER_1 = "13292"
+    MILVUS_PORT_SERVER_2 = "17358"
+    MILVUS_HOST = "100.98.10.24"
     MILVUS_PORT = "19530"
     MILVUS_USER = "root"
+    MILVUS_URI = "https://in01-1f61f396e17dbdc.aws-ap-southeast-1.vectordb.zillizcloud.com:19532"
+    MILVUS_TOKEN = "5ef2fb49d1d361c619e49d1da4c085664dc7fe230793f655451d09b1fd1bc18ad0b0d3e9bd4f14c66c05f6b1aad5f93c2e67fc46"
     MILVUS_PASSWORD = "aiostorm"
-    COLLECTION_NAME = "pmc_papers"
+    COLLECTION_NAME = "pmc_papers_v1"
 
     # Tasks weights
     CLASSIFICATION_WEIGHT = 1.0

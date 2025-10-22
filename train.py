@@ -81,7 +81,7 @@ def load_checkpoint(filepath, model, optimizer, device):
             print(f"Lỗi khi load best_model.pt: {e}")
 
     if not loaded:
-        print("Không tìm thấy hoặc không load được checkpoint, bắt đầu từ đầu.")
+        print("Không tìm thấy checkpoint, bắt đầu từ PubMedBERT pretrained.")
         start_epoch = 0
         start_step = 0
 
@@ -115,7 +115,6 @@ def train():
     print(f"Số lượng GPU có sẵn: {n_gpus}")
     if n_gpus > 1:
         print(f"Sử dụng DataParallel trên {n_gpus} GPU")
-
     tokenizer = AutoTokenizer.from_pretrained(Config.MODEL_NAME)
     model = BiEncoder(
         model_name=Config.MODEL_NAME,
@@ -182,6 +181,7 @@ def train():
     writer = SummaryWriter(log_path)
 
     start_epoch, global_step, best_loss = load_checkpoint(checkpoint_path, model, optimizer, device)
+    dev_loss = best_loss  # Initialize dev_loss for intermediate checkpoints
 
     # ==== TRAINING LOOP ====
     for epoch in range(start_epoch, epochs):
@@ -227,6 +227,8 @@ def train():
             writer.add_scalar("Train/learning_rate", scheduler.get_last_lr()[0], global_step)
 
             global_step += 1
+            if i %  1 == 0 and i > 0:
+                save_checkpoint(checkpoint_path, epoch, global_step, model, optimizer, dev_loss)
 
         train_loss = sum(all_losses) / len(all_losses)
         print(f"Epoch {epoch + 1}/{epochs} - Train Loss: {train_loss:.4f}")
@@ -257,8 +259,6 @@ def train():
 
         writer.add_scalar("Dev/loss", dev_loss, epoch)
         writer.add_scalar("Train/epoch_loss", train_loss, epoch)
-
-        save_checkpoint(checkpoint_path, epoch, global_step, model, optimizer, dev_loss)
 
     writer.close()
 

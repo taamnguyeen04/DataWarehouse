@@ -73,10 +73,24 @@ class BiEncoder(nn.Module):
         # L2 normalization for cosine similarity
         return F.normalize(pooled, p=2, dim=1)
 
-    def forward(self, query_input_ids, query_attention_mask, doc_input_ids, doc_attention_mask):
-        query_embeddings = self.encode_query(query_input_ids, query_attention_mask)
-        doc_embeddings = self.encode_doc(doc_input_ids, doc_attention_mask)
-        return query_embeddings, doc_embeddings
+    def forward(self, query_input_ids=None, query_attention_mask=None,
+                doc_input_ids=None, doc_attention_mask=None, mode='dual'):
+        """
+        Forward với multiple modes để support DataParallel
+        mode='dual': training mode, trả về (query_emb, doc_emb)
+        mode='doc': inference mode, chỉ encode documents
+        mode='query': inference mode, chỉ encode queries
+        """
+        if mode == 'dual':
+            query_embeddings = self.encode_query(query_input_ids, query_attention_mask)
+            doc_embeddings = self.encode_doc(doc_input_ids, doc_attention_mask)
+            return query_embeddings, doc_embeddings
+        elif mode == 'doc':
+            return self.encode_doc(doc_input_ids, doc_attention_mask)
+        elif mode == 'query':
+            return self.encode_query(query_input_ids, query_attention_mask)
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
 
 
 class InfoNCELoss(nn.Module):
