@@ -27,9 +27,9 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-corpus_path = f"C:/Users/tam/Documents/data/Data Warehouse/ReCDS_benchmark/PAR/corpus.jsonl"
-query_path = f"C:/Users/tam/Documents/data/Data Warehouse/ReCDS_benchmark/queries/test_queries.jsonl"
-qrels_path = f"C:/Users/tam/Documents/data/Data Warehouse/ReCDS_benchmark/PAR/qrels_test.tsv"
+corpus_path = f"C:/Users/tam/Desktop/Data/Data Warehouse/ReCDS_benchmark/PAR/corpus.jsonl"
+query_path = f"C:/Users/tam/Desktop/Data/Data Warehouse/ReCDS_benchmark/queries/test_queries.jsonl"
+qrels_path = f"C:/Users/tam/Desktop/Data/Data Warehouse/ReCDS_benchmark/PAR/qrels_test.tsv"
 corpus, queries, qrels = GenericDataLoader(
     corpus_file=corpus_path, 
     query_file=query_path, 

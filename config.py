@@ -2,8 +2,9 @@ import os
 
 class Config:
     # Paths
-    DATA_DIR = "C:/Users/tam/Documents/data/Data Warehouse"
+    DATA_DIR = "C:/Users/tam/Desktop/Data/Data Warehouse"
     CORPUS_FILE = os.path.join(DATA_DIR, "ReCDS_benchmark/PAR/corpus.jsonl")
+    CORPUS_INDEX_FILE = os.path.join(DATA_DIR, "ReCDS_benchmark/PAR/corpus_index.pkl")
     PMID_MESH_FILE = os.path.join(DATA_DIR, "meta_data/PMID2MeSH.json")
     PATIENTS_FILE = os.path.join(DATA_DIR, "PMC-Patients.json")
     RELEVANCE_FILE = os.path.join(DATA_DIR, "patient2article_relevance.json")
@@ -16,6 +17,7 @@ class Config:
     TEST_QUERIES = os.path.join(DATA_DIR, "ReCDS_benchmark/queries/test_queries.jsonl")
     TEST_QRELS = os.path.join(DATA_DIR, "ReCDS_benchmark/PAR/qrels_test.tsv")
     RECDS_CORPUS = os.path.join(DATA_DIR, "ReCDS_benchmark/corpus.jsonl")
+    PAIRS_TRAIN_FILE = os.path.join(DATA_DIR, "ReCDS_benchmark/PAR/gold/pairs_train.jsonl")
 
     # Model
     MODEL_NAME = "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract-fulltext"
@@ -43,18 +45,18 @@ class Config:
     LOG_INTERVAL = 50
 
     # Milvus
-    # MILVUS_HOST = "127.0.0.1"
+    MILVUS_HOST = "127.0.0.1"
     # MILVUS_PORT = "19530"
     MILVUS_HOST_SERVER = "0.tcp.ap.ngrok.io"
     MILVUS_PORT_SERVER_1 = "13292"
     MILVUS_PORT_SERVER_2 = "17358"
-    MILVUS_HOST = "100.98.10.24"
+    # MILVUS_HOST = "100.98.10.24"
     MILVUS_PORT = "19530"
     MILVUS_USER = "root"
-    MILVUS_URI = "https://in01-1f61f396e17dbdc.aws-ap-southeast-1.vectordb.zillizcloud.com:19532"
-    MILVUS_TOKEN = "5ef2fb49d1d361c619e49d1da4c085664dc7fe230793f655451d09b1fd1bc18ad0b0d3e9bd4f14c66c05f6b1aad5f93c2e67fc46"
+    MILVUS_URI = "https://in05-0c7fef863ca43c4.serverless.aws-eu-central-1.cloud.zilliz.com"
+    MILVUS_TOKEN = "5c9300395f1ed7bb3ca8d90b913eb87fe72666c8f1ed941b86a22bf3a33c33604e24f7168a89f68ff3e3b0bb609465dcc48eaf60"
     MILVUS_PASSWORD = "aiostorm"
-    COLLECTION_NAME = "pmc_papers_v1"
+    COLLECTION_NAME = "pmc_papers_v2"
 
     # Tasks weights
     CLASSIFICATION_WEIGHT = 1.0

@@ -1,27 +1,3 @@
-"""
-Generate test results for PAR (Patient-to-Article Retrieval) task evaluation.
-
-This script:
-1. Loads test queries from test_queries.jsonl
-2. Uses the trained model to retrieve relevant articles for each query
-3. Generates a JSON file in the format required by evaluation.py
-
-Output format:
-{
-    "query_id_1": {
-        "doc_id_1": score1,
-        "doc_id_2": score2,
-        ...
-    },
-    "query_id_2": {
-        "doc_id_3": score3,
-        "doc_id_4": score4,
-        ...
-    },
-    ...
-}
-"""
-
 import torch
 import json
 import argparse
@@ -59,7 +35,7 @@ def generate_test_results(
     retriever: PaperRetriever,
     queries: List[Dict],
     top_k: int = 1000,
-    metric_type: str = "COSINE"
+    metric_type: str = "L2"
 ) -> Dict[str, Dict[str, float]]:
     """
     Generate retrieval results for all test queries.
@@ -130,91 +106,51 @@ def save_results(results: Dict, output_path: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Generate test results for PAR task evaluation"
-    )
-    parser.add_argument(
-        "--queries_path",
-        type=str,
-        default=r"C:\Users\tam\Documents\data\Data Warehouse\ReCDS_benchmark\queries\test_queries.jsonl",
-        help="Path to test_queries.jsonl file"
-    )
-    parser.add_argument(
-        "--model_path",
-        type=str,
-        default="./PAR/checkpoints/best_model.pt",
-        help="Path to trained model checkpoint"
-    )
-    parser.add_argument(
-        "--output_path",
-        type=str,
-        default="./PAR/results/test_results_1.json",
-        help="Path to save output JSON file"
-    )
-    parser.add_argument(
-        "--top_k",
-        type=int,
-        default=1000,
-        help="Number of documents to retrieve per query (default: 1000 for R@1k metric)"
-    )
-    parser.add_argument(
-        "--metric_type",
-        type=str,
-        default="COSINE",
-        choices=["COSINE", "IP", "L2"],
-        help="Similarity metric type (default: COSINE)"
-    )
-    parser.add_argument(
-        "--use_pretrained",
-        type=bool,
-        default=True,
-        help="Use pretrained model without fine-tuning (True/False)"
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda",
-        help="Device to use (cuda/cpu, default: auto)"
-    )
-
-    args = parser.parse_args()
+    # Configuration
+    QUERIES_PATH = "C:/Users/tam/Desktop/Data/Data Warehouse/ReCDS_benchmark/queries/test_queries.jsonl"
+    MODEL_PATH = "best_model.pt"
+    OUTPUT_PATH = "./PAR/results/test_results_3.json"
+    TOP_K = 1000
+    METRIC_TYPE = "L2"
+    USE_PRETRAINED = False # Set to False to use fine-tuned model
+    DEVICE = None # None for auto-detect
 
     print("="*80)
     print("Generate Test Results for PAR Task")
     print("="*80)
-    print(f"Queries path: {args.queries_path}")
-    print(f"Model path: {args.model_path}")
-    print(f"Output path: {args.output_path}")
-    print(f"Top-K: {args.top_k}")
-    print(f"Metric type: {args.metric_type}")
-    print(f"Use pretrained: {args.use_pretrained}")
+    print(f"Queries path: {QUERIES_PATH}")
+    print(f"Model path: {MODEL_PATH}")
+    print(f"Output path: {OUTPUT_PATH}")
+    print(f"Top-K: {TOP_K}")
+    print(f"Metric type: {METRIC_TYPE}")
+    print(f"Use pretrained: {USE_PRETRAINED}")
     print("="*80)
 
     # Load test queries
-    queries = load_test_queries(args.queries_path)
+    queries = load_test_queries(QUERIES_PATH)
 
     # Initialize retriever
     print("\nInitializing retriever...")
     retriever = PaperRetriever(
-        model_path=args.model_path if not args.use_pretrained else None,
-        use_pretrained=args.use_pretrained,
-        device=args.device
+        model_path=MODEL_PATH if not USE_PRETRAINED else None,
+        use_pretrained=USE_PRETRAINED,
+        device=DEVICE
     )
 
     # Generate results
     results = generate_test_results(
         retriever=retriever,
         queries=queries,
-        top_k=args.top_k,
-        metric_type=args.metric_type
+        top_k=TOP_K,
+        metric_type=METRIC_TYPE
     )
 
     # Save results
-    save_results(results, args.output_path)
+    save_results(results, OUTPUT_PATH)
 
     print("\n" + "="*80)
     print("Done! You can now evaluate using:")
-    print(f"python evaluation.py --task PAR --split test --result_path {args.output_path}")
+    print(f"python evaluation.py --task PAR --split test --result_path {OUTPUT_PATH}")
     print("="*80)
 
 
