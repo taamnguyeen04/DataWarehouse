@@ -1,220 +1,115 @@
-# DataWarehouse
-- test lần 1 train 1epoch: {'MRR': 0.01965, 'P@10': 0.00354, 'NDCG@10': 0.00703, 'R@1k': 0.0356}
-{'MRR': 0.00706, 'P@10': 0.00081, 'NDCG@10': 0.00088, 'R@1k': 0.41731}
-{'MRR': 0.00836, 'P@10': 0.00118, 'NDCG@10': 0.00116, 'R@1k': 0.453}
-{'MRR': 0.06923, 'P@10': 0.01878, 'NDCG@10': 0.02329, 'R@1k': 0.453}
-{'MRR': 0.19807, 'P@10': 0.06101, 'NDCG@10': 0.08311, 'R@1k': 0.453}
----
+# Hệ thống RAG & Truy xuất Thông tin Y tế
 
-# 🟡 TẦNG GOLD – Chuẩn bị dữ liệu cho BM25 và huấn luyện Bi-Encoder
+![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.68+-green.svg)
+![PyTorch](https://img.shields.io/badge/PyTorch-1.9+-orange.svg)
+![Milvus](https://img.shields.io/badge/Milvus-2.0-lightgrey.svg)
+![Gemini](https://img.shields.io/badge/AI-Gemini_Flash-yellow.svg)
 
----
-
-## 🎯 Mục tiêu của tầng Gold
-
-Tầng **Gold** = “Feature Engineering Layer”
-→ nơi bạn **tạo ra tất cả các dữ liệu trung gian đặc thù cho mô hình**, từ **Silver** (đã clean) để **mô hình chỉ cần đọc và train, không xử lý thêm**.
-
-Trong bài toán PAR:
-
-> Gold layer phải sinh ra các **negatives chất lượng cao** (BM25 hard negatives)
-> và các **dataset pairs** `(query, pos_doc, neg_doc)` sẵn sàng cho DataLoader.
+> **Một hệ thống truy xuất thông tin y tế toàn diện, hiệu năng cao, kết hợp truy xuất hai giai đoạn (Bi-Encoder + Cross-Encoder) với Retrieval-Augmented Generation (RAG) để cung cấp câu trả lời y khoa chính xác, dựa trên bằng chứng thực tế.**
 
 ---
 
-## ⚙️ 1️⃣ Input cho tầng Gold
+## Tổng quan
 
-| Tên file                    | Nguồn tầng Silver | Vai trò                                                    |
-| --------------------------- | ----------------- | ---------------------------------------------------------- |
-| `corpus_clean.jsonl`        | Silver            | Toàn bộ corpus bài báo đã làm sạch (title + abstract).     |
-| `train_queries_clean.jsonl` | Silver            | Tập query bệnh nhân đã chuẩn hóa text.                     |
-| `qrels_train.tsv`           | Silver            | Mapping query_id → positive_doc_id (relevance = 1 hoặc 2). |
+Dự án này triển khai một công cụ tìm kiếm y khoa mạnh mẽ được thiết kế để tìm các bài báo khoa học liên quan (PubMed) dựa trên mô tả bệnh nhân hoặc các câu hỏi y tế. Hệ thống sử dụng pipeline hai giai đoạn để cân bằng giữa tốc độ và độ chính xác, giải quyết vấn đề "ảo giác" (hallucination) trong các mô hình ngôn ngữ lớn (LLM) bằng cách căn cứ câu trả lời vào các tài liệu y văn thực tế đã được tìm kiếm.
+
+### Tính năng nổi bật
+- **Truy xuất Hai Giai đoạn (Two-Stage Retrieval)**:
+  - **Giai đoạn 1 (Bi-Encoder)**: Tìm kiếm vector tốc độ cao sử dụng Milvus để lấy ra top-k ứng viên tiềm năng (Recall cao).
+  - **Giai đoạn 2 (Cross-Encoder)**: Sắp xếp lại (Re-ranking) chính xác sử dụng PubMedBERT để chấm điểm mức độ liên quan (Precision cao).
+- ** RAG Chatbot**: Tích hợp `Gemini-2.5-flash` để tổng hợp câu trả lời từ các bài báo đã tìm được với yêu cầu trích dẫn nguồn (PMID) nghiêm ngặt.
+- **API Hiệu năng cao**: Được xây dựng với FastAPI, sẵn sàng cho việc mở rộng (scalable).
+- **Đánh giá Toàn diện**: Cung cấp các công cụ để phân tích MRR, nDCG và Precision.
 
 ---
 
-## 🧩 2️⃣ Các bước xử lý trong tầng Gold
+## Đánh giá Hiệu năng
 
-Tầng Gold gồm 4 bước chính (theo pipeline):
+Chúng tôi đã đánh giá hệ thống so với các baseline (kiểm chứng cơ sở) tiên tiến nhất trên các bộ benchmark truy xuất y tế.
 
-### **Bước 1. Build BM25 Index**
+### Bảng Xếp hạng Truy xuất (Retrieval Leaderboard)
 
-**Mục đích:**
-Tạo index lexical (BM25) để có thể truy vấn các bài viết bằng text.
+| Mô hình | MRR (%) | P@10 (%) | nDCG@10 (%) | R@1k (%) |
+| :--- | :---: | :---: | :---: | :---: |
+| **Baselines** (Tham khảo từ Leaderboard) | | | | |
+| DPR (SciMult-MHAExpert) [3] | **29.89** | **9.35** | **13.79** | **53.71** |
+| RRF (Reciprocal Rank Fusion) [4] | 29.86 | 8.86 | 13.36 | 49.45 |
+| DPR (PubMedBERT) [4] | 19.83 | 6.51 | 8.87 | 46.23 |
+| DPR (BioLinkBERT) [4] | 19.06 | 6.11 | 8.26 | 45.79 |
+| DPR (SPECTER) [4] | 17.92 | 5.49 | 7.66 | 42.46 |
+| BM25 (Lexical Baseline) [4] | 18.71 | 3.84 | 7.38 | 21.89 |
+| bge-base-en-v1.5 [2] | 15.88 | 4.27 | 6.44 | 30.43 |
+| MedCPT-d [1] | 13.06 | 2.67 | 4.95 | 19.94 |
+| **Hệ thống của Chúng tôi** | | | | |
+| 🔹 **Cross-Encoder (Stage 2)** | **19.80** | **6.10** | **8.30** | **45.30** |
+| 🔸 Bi-Encoder (Stage 1) | 6.92 | 1.88 | 2.33 | 45.30 |
 
-**Thực hiện bằng:** [Pyserini](https://github.com/castorini/pyserini)
+> **Phân tích**: **Cross-Encoder (Giai đoạn 2)** của chúng tôi cải thiện đáng kể hiệu năng xếp hạng so với kết quả thô từ Bi-Encoder, đạt hiệu năng cạnh tranh với các baseline mạnh dựa trên BERT như DPR (PubMedBERT). Cụ thể, MRR tăng ấn tượng từ ~6.9% lên ~19.8% và độ chính xác (P@10) tăng từ ~1.9% lên ~6.1%.
 
-**Input:** `corpus_clean.jsonl`
-**Output:**
+---
 
-* Thư mục `bm25_index/` (Lucene index)
+## Kiến trúc Hệ thống
 
-**Cấu trúc output:**
+1.  **Xử lý Truy vấn**: Vector hóa câu hỏi của người dùng.
+2.  **Tìm kiếm Dense (Milvus)**: Tìm kiếm trong hơn 1 triệu tóm tắt PubMed đã được đánh chỉ mục để lấy Top 100 ứng viên.
+3.  **Sắp xếp lại (Re-Ranking)**: Mô hình Cross-Encoder chuyên biệt (PubMedBERT) chấm điểm lại từng cặp (Câu hỏi, Tài liệu).
+4.  **Sinh câu trả lời (Generative Answer)**: Top 5 tài liệu tốt nhất được gửi vào LLM (Gemini) làm ngữ cảnh để trả lời câu hỏi.
 
-```
-/PAR/gold/bm25_index/
-    ├── segments_1/
-    ├── write.lock
-    ├── _SUCCESS
-    └── ...
-```
+---
 
-**Code minh họa:**
-[corpus.jsonl](../../data/Data%20Warehouse/ReCDS_benchmark/PAR/corpus.jsonl)
-"C:\Users\tam\Documents\data\Data Warehouse\ReCDS_benchmark\PAR\qrels_train.tsv"
-"C:\Users\tam\Documents\data\Data Warehouse\ReCDS_benchmark\queries\train_queries.jsonl"
+## Cấu trúc Dự án
+
 ```bash
-python -m pyserini.index.lucene \
-  --collection JsonCollection \
-  --input C:\Users\tam\Documents\data\Data Warehouse/PAR/silver \
-  --index C:\Users\tam\Documents\data\Data Warehouse/PAR/gold/bm25_index \
-  --generator DefaultLuceneDocumentGenerator \
-  --threads 8 \
-  --storePositions --storeDocvectors --storeRaw
+DataWarehouse/
+├── api_server.py             # Backend API Chính (Các endpoint truy xuất)
+├── rag_chatbot_api.py        # API RAG Chatbot riêng biệt
+├── retrieve.py               # Class xử lý logic tìm kiếm cốt lõi
+├── train_cross_encoder.py    # Script huấn luyện Cross-Encoder
+├── insert_to_milvus.py       # Pipeline đánh chỉ mục vào Vector DB
+├── corpus_loader.py          # Quản lý & tải dữ liệu Corpus hiệu quả
+└── requirements.txt          # Các thư viện phụ thuộc
 ```
 
-> 🧠 Tip: Pyserini mặc định sẽ lowercase + remove stopwords (đúng với BM25 logic).
-> Nếu bạn muốn giữ từ chuyên ngành, có thể dùng custom stopword list.
+## Hướng dẫn Cài đặt & Sử dụng
 
----
+### Yêu cầu tiên quyết
+- Python 3.10+
+- GPU hỗ trợ CUDA (Khuyên dùng cho các mô hình Neural)
+- Milvus (Đã cài đặt và đang chạy)
 
-### **Bước 2. Retrieve top-k BM25 results cho mỗi query**
+### Cài đặt
 
-**Mục đích:**
-Lấy **các bài báo “gần giống”** với query theo BM25 — dùng làm **candidates for hard negatives**.
+1.  **Clone repository**
+    ```bash
+    git clone https://github.com/yourusername/DataWarehouse.git
+    cd DataWarehouse
+    ```
 
-**Input:**
+2.  **Cài đặt các thư viện**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-* `train_queries_clean.jsonl`
-* `qrels_train.tsv`
-* BM25 index (`bm25_index/`)
+3.  **Thiết lập Môi trường**
+    Tạo file `.env`:
+    ```env
+    GOOGLE_API_KEY=your_gemini_key_here
+    MILVUS_URI=...
+    ```
 
-**Output:**
+### Sử dụng
 
-* `bm25_candidates_topk.json`
-
-**Cấu trúc file output:**
-
-```json
-{
-  "P001": ["PM123", "PM456", "PM789", "PM111", ...],
-  "P002": ["PM222", "PM333", "PM444", "PM555", ...],
-  ...
-}
+**Chạy RAG API Server:**
+```bash
+python rag_chatbot_api.py
 ```
+> Server sẽ khởi chạy tại `http://localhost:8001`
 
----
-
-### **Bước 3. Loại bỏ các positive khỏi top-k để tạo hard negatives**
-
-**Mục đích:**
-Từ top-k BM25, loại bỏ các tài liệu *đúng* (positive trong qrels), giữ lại những tài liệu *sai nhưng gần đúng* làm **hard negatives**.
-
-**Input:**
-
-* `bm25_candidates_topk.json`
-* `qrels_train.tsv`
-
-**Output:**
-
-* `bm25_hard_negs.json`
-
-**Cấu trúc output:**
-
-```json
-{
-  "P001": ["PM456", "PM789", "PM111", "PM222"],
-  "P002": ["PM333", "PM444", "PM555"],
-  ...
-}
+**Chạy Đánh giá Truy xuất:**
+```bash
+python rerank_results.py
 ```
 
 ---
-
-### **Bước 4. Tạo cặp train-ready (query, pos_doc, neg_doc)**
-
-**Mục đích:**
-Ghép mỗi query với một positive (từ qrels) và vài negative (từ BM25 hoặc random)
-→ mô hình bi-encoder có thể train trực tiếp.
-
-**Input:**
-
-* `train_queries_clean.jsonl`
-* `qrels_train.tsv`
-* `bm25_hard_negs.json`
-
-**Output:**
-
-* `pairs_train.jsonl`
-
-**Cấu trúc file output:**
-
-```json
-{"query_id": "P001", "pos_id": "PM123", "neg_ids": ["PM456", "PM789"]}
-{"query_id": "P002", "pos_id": "PM222", "neg_ids": ["PM333"]}
-```
-
----
-
-## 📦 3️⃣ Output đầy đủ của tầng Gold
-
-| File                              | Vai trò                                          | Được dùng bởi           |
-| --------------------------------- | ------------------------------------------------ | ----------------------- |
-| `/gold/bm25_index/`               | Lucene index để truy vấn BM25                    | Bước 2 (retrieve top-k) |
-| `/gold/bm25_candidates_topk.json` | Top-k kết quả BM25 cho mỗi query                 | Bước 3                  |
-| `/gold/bm25_hard_negs.json`       | Danh sách hard negatives (BM25)                  | DataLoader khi train    |
-| `/gold/pairs_train.jsonl`         | Dataset (query, pos_doc, neg_doc) cho huấn luyện | Bi-Encoder model        |
-| `/gold/pairs_dev.jsonl`           | (tuỳ chọn) tạo từ dev split                      | Validation              |
-
----
-
-## 🧠 4️⃣ Cách các file này được dùng trong huấn luyện
-
-Trong code `train1.py`, bạn chỉ cần thay dòng khởi tạo dataset:
-
-```python
-train_dataset = PARDatasetOptimized(
-    queries_file=Config.TRAIN_QUERIES,
-    qrels_file=Config.TRAIN_QRELS,
-    corpus_file=Config.CORPUS_FILE,
-    tokenizer=tokenizer,
-    max_length=Config.MAX_LENGTH,
-    hard_negatives_file="/mnt/par/.../gold/bm25_hard_negs.json"
-)
-```
-
-Dataset sẽ:
-
-* Load positive từ qrels,
-* Lấy 1–n negative từ file `bm25_hard_negs.json`,
-* Tokenize và trả về cho mô hình train InfoNCE loss.
-
----
-
-## 🪄 5️⃣ Tổng kết pipeline tầng Gold (một dòng mỗi bước)
-
-```
-1️⃣ Build BM25 index (Pyserini)
-2️⃣ Retrieve top-k documents / query
-3️⃣ Filter out positives → create hard negatives
-4️⃣ Merge qrels + hard_negatives → pairs_train.jsonl
-```
-
----
-
-## 🧩 6️⃣ Mối quan hệ với tầng Silver và Model
-
-```
-SILVER
- ├── corpus_clean.jsonl
- ├── train_queries_clean.jsonl
- └── qrels_train.tsv
-   ↓
-GOLD
- ├── bm25_index/
- ├── bm25_candidates_topk.json
- ├── bm25_hard_negs.json
- └── pairs_train.jsonl
-   ↓
-MODEL
- └── train1.py (BiEncoder)
-```
+*Dự án Nghiên cứu Truy xuất Thông tin Y tế*
