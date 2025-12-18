@@ -1,6 +1,6 @@
 # Hệ thống RAG & Truy xuất Thông tin Y tế
 
-![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.68+-green.svg)
 ![PyTorch](https://img.shields.io/badge/PyTorch-1.9+-orange.svg)
 ![Milvus](https://img.shields.io/badge/Milvus-2.0-lightgrey.svg)
@@ -74,7 +74,7 @@ DataWarehouse/
 ## Hướng dẫn Cài đặt & Sử dụng
 
 ### Yêu cầu tiên quyết
-- Python 3.10+
+- Python 3.11+
 - GPU hỗ trợ CUDA (Khuyên dùng cho các mô hình Neural)
 - Milvus (Đã cài đặt và đang chạy)
 
@@ -97,6 +97,13 @@ DataWarehouse/
     GOOGLE_API_KEY=your_gemini_key_here
     MILVUS_URI=...
     ```
+
+4.  **Tải Model**
+    Tải các weights đã huấn luyện và đặt vào đúng vị trí:
+    - **Bi-Encoder (`best_model.pt`)**: [Tải về tại đây](https://drive.google.com/file/d/1pxyLZIbDD0Dm_G59_8f5crCBpyosLNMJ/view?usp=sharing)
+      > Đặt file này tại thư mục gốc của dự án.
+    - **Cross-Encoder**: [Tải về tại đây](https://drive.google.com/file/d/1Md69MAdvIMrmZFS046y7HTmBeih8y56S/view?usp=sharing)
+      > Giải nén và đặt tại: `./output/cross-encoder-pubmedbert`
 
 ### Sử dụng
 
